@@ -1,0 +1,96 @@
+version: '3.7'
+
+services:
+
+  traefik:
+    image: traefik:1.7
+    container_name: test-traefik
+    command: --api --docker --docker.exposedbydefault=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/traefik.toml:/traefik.toml
+      - ./config/certs/:/certs/
+    labels:
+      - traefik.enable=true
+      - traefik.backend=test-traefik
+      - traefik.frontend.rule=Host:dashboard.localhost
+      - traefik.port=8080
+
+  portainer:
+    image: portainer/portainer
+    container_name: test-portainer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ob_portainer_data:/data
+    labels:
+      - traefik.enable=true
+      - traefik.backend=test-portainer
+      - traefik.frontend.rule=Host:portainer.localhost
+      - traefik.port=9000
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: test-mailhog
+    labels:
+      - traefik.enable=true
+      - traefik.backend=test-mailhog
+      - traefik.frontend.rule=Host:mailhog.localhost
+      - traefik.port=8025
+
+  postgres:
+    image: postgres:11.1-alpine
+    container_name: test-postgres
+    volumes:
+      - ob_postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=foo
+      - POSTGRES_PASSWORD=bar
+      - POSTGRES_DB=dev
+    ports:
+      - "5432:5432"
+
+#  redis:
+#    image: redis:alpine
+#    container_name: test-redis
+
+#  elasticsearch:
+#    image: elasticsearch:6.5.4
+#    container_name: test-elasticsearch
+  
+  webserver:
+    image: nginx:alpine
+    container_name: test-webserver
+    volumes:
+      - ./source:/var/www/html:ro
+      - ./config/nginx.conf:/etc/nginx/conf.d/default.conf
+    working_dir: /var/www/html/public
+    labels:
+      - traefik.enable=true
+      - traefik.backend=test-webserver
+      - traefik.frontend.rule=Host:localhost
+
+  php-fpm:
+    build: docker/php-fpm
+    container_name: test-php-fpm
+    volumes:
+      - ./source:/var/www/html:rw
+    working_dir: /var/www/html/public
+    environment:
+      PHP_EXTENSION_PGSQL: 1
+      PHP_EXTENSION_PDO_PGSQL: 1
+      PHP_EXTENSION_BCMATH: 1
+      PHP_EXTENSION_GD: 1
+      PHP_EXTENSION_INTL: 1
+      PHP_EXTENSION_YAML: 1
+      PHP_EXTENSION_MYSQLI: 0
+      PHP_EXTENSION_PDO_MYSQL: 0
+      PHP_EXTENSION_XDEBUG: 1
+
+volumes:
+  ob_postgres_data:
+    driver: local
+  ob_portainer_data:
+    driver: local
